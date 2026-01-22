@@ -1,21 +1,21 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NormalizedTu } from '../types';
-import { Clock, User, Hash, Tag, Calendar, Layers } from 'lucide-react';
+import { Clock, User, Hash, Tag, Calendar, Layers, Copy, Check } from 'lucide-react';
 
 interface TuCardProps {
   tu: NormalizedTu;
-  highlightText?: string;
+  highlightText?: string; // Currently unused but good for future ext
+  searchMode?: string;
+  searchQuery?: string;
 }
 
 const formatDate = (dateStr?: string) => {
   if (!dateStr) return null;
-  // TMX dates are usually YYYYMMDDTHHMMSSZ
   try {
     const year = dateStr.substring(0, 4);
     const month = dateStr.substring(4, 6);
     const day = dateStr.substring(6, 8);
     const time = dateStr.substring(9, 15);
-    // Format: YYYY-MM-DD HH:MM:SS
     const formattedTime = time.length >= 6 
       ? `${time.substring(0,2)}:${time.substring(2,4)}:${time.substring(4,6)}` 
       : time;
@@ -25,11 +25,25 @@ const formatDate = (dateStr?: string) => {
   }
 };
 
-export const TuCard: React.FC<TuCardProps> = ({ tu }) => {
-  // Separate variants into "Source" (matching header lang) and "Targets"
+export const TuCard: React.FC<TuCardProps> = ({ tu, searchMode, searchQuery }) => {
   const sourceVariant = tu.variants.find(v => v.lang === tu.srcLang) || tu.variants[0];
   const targetVariants = tu.variants.filter(v => v !== sourceVariant);
   const hasProps = Object.keys(tu.props).length > 0;
+  
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopy = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(key);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const isSegmentIdMatch = (key: string, val: string) => {
+    if (key !== 'x-segment-id' || !searchQuery) return false;
+    if (searchMode === 'id_partial' || searchMode === 'text') return val.toLowerCase().includes(searchQuery.toLowerCase());
+    if (searchMode === 'id_prefix') return val.toLowerCase().startsWith(searchQuery.toLowerCase());
+    return false;
+  };
 
   return (
     <div className="bg-white border border-slate-200 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden mb-4 flex flex-col">
@@ -51,9 +65,9 @@ export const TuCard: React.FC<TuCardProps> = ({ tu }) => {
         </div>
       </div>
 
-      {/* Main Content: Source -> Target(s) */}
+      {/* Main Content */}
       <div className="p-5 grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Source Segment */}
+        {/* Source */}
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
             <span className="px-2 py-0.5 rounded text-[11px] font-bold tracking-wide uppercase bg-blue-50 text-blue-700 border border-blue-100">
@@ -65,7 +79,7 @@ export const TuCard: React.FC<TuCardProps> = ({ tu }) => {
           </p>
         </div>
 
-        {/* Target Segment(s) */}
+        {/* Targets */}
         <div className="flex flex-col gap-4">
           {targetVariants.map((variant, idx) => (
             <div key={`${tu.id}-${variant.lang}-${idx}`} className="flex flex-col gap-2">
@@ -82,11 +96,10 @@ export const TuCard: React.FC<TuCardProps> = ({ tu }) => {
         </div>
       </div>
 
-      {/* Footer: Metadata Always Visible */}
+      {/* Footer: Metadata */}
       <div className="mt-auto bg-slate-50 px-4 py-3 border-t border-slate-100 text-xs text-slate-500">
          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             
-            {/* Standard Meta Info */}
             {(tu.metadata.creationDate || tu.metadata.createUser) && (
               <div className="flex items-center gap-2">
                 <Calendar size={12} className="text-slate-400"/>
@@ -106,27 +119,36 @@ export const TuCard: React.FC<TuCardProps> = ({ tu }) => {
               </div>
             )}
 
-            {tu.metadata.usageCount && (
-               <div className="flex items-center gap-2">
-                <Layers size={12} className="text-slate-400"/>
-                <span className="text-slate-400">Usage:</span>
-                <span className="font-medium text-slate-600">{tu.metadata.usageCount}</span>
-              </div>
-            )}
-
-            {/* Separator if we have custom props */}
             {hasProps && (
                <div className="hidden sm:block w-px h-3 bg-slate-300 mx-2"></div>
             )}
 
-            {/* Custom Properties */}
-            {Object.entries(tu.props).map(([key, val]) => (
-                <div key={key} className="flex items-center gap-1 bg-white border border-slate-200 px-1.5 py-0.5 rounded shadow-sm">
-                    <Tag size={10} className="text-slate-400" />
-                    <span className="font-semibold text-slate-500">{key}:</span>
-                    <span className="text-slate-700 font-mono truncate max-w-[200px]" title={val}>{val}</span>
-                </div>
-            ))}
+            {Object.entries(tu.props).map(([key, val]) => {
+                const value = val as string;
+                const isId = key === 'x-segment-id';
+                const isMatch = isSegmentIdMatch(key, value);
+                
+                return (
+                  <div 
+                    key={key} 
+                    onClick={isId ? () => handleCopy(value, key) : undefined}
+                    className={`flex items-center gap-1 px-1.5 py-0.5 rounded shadow-sm border transition-all 
+                      ${isId ? 'cursor-pointer hover:bg-blue-50 hover:border-blue-200 group' : 'bg-white border-slate-200'}
+                      ${isMatch ? 'ring-2 ring-yellow-400 bg-yellow-50' : ''}
+                    `}
+                    title={isId ? "Click to copy ID" : value}
+                  >
+                      {copiedId === key ? <Check size={10} className="text-green-600"/> : <Tag size={10} className="text-slate-400" />}
+                      <span className="font-semibold text-slate-500">{key}:</span>
+                      <span className={`font-mono truncate max-w-[200px] ${isId ? 'text-blue-700 font-bold' : 'text-slate-700'}`}>
+                        {value}
+                      </span>
+                      {isId && (
+                        <Copy size={8} className="opacity-0 group-hover:opacity-100 text-blue-400 transition-opacity ml-1" />
+                      )}
+                  </div>
+                );
+            })}
          </div>
       </div>
     </div>
