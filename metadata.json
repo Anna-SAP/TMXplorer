@@ -1,0 +1,5 @@
+{
+  "name": "🥝 TMXplorer",
+  "description": "A professional Translation Memory exchange (TMX) viewer and analyzer. Upload TMX files to visualize translation units, analyze metadata, and inspect translation variants with a modern, responsive interface.",
+  "requestFramePermissions": []
+}
